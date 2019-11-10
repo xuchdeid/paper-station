@@ -28,6 +28,7 @@ SOFTWARE.
 from micropython import const
 from time import sleep_ms
 import ustruct
+import framebuf
 
 # Display resolution
 EPD_WIDTH = const(128)
@@ -36,25 +37,27 @@ EPD_HEIGHT = const(250)
 
 # Display commands
 DRIVER_OUTPUT_CONTROL = const(0x01)
-# Gate Driving Voltage Control       0x03
-# Source Driving voltage Control     0x04
+Gate_Driving_Voltage_Control = const(0x03)
+Source_Driving_voltage_Control = const(0x04)
 BOOSTER_SOFT_START_CONTROL = const(0x0C)  # not in datasheet
 # GATE_SCAN_START_POSITION             = const(0x0F) # not in datasheet
 DEEP_SLEEP_MODE = const(0x10)
 DATA_ENTRY_MODE_SETTING = const(0x11)
-#SW_RESET                             = const(0x12)
+SW_RESET = const(0x12)
+ANALOG_BLOCK_CONTROL = const(0x74)
+DIGITAL_BLOCK_CONTROL = const(0x7E)
 #TEMPERATURE_SENSOR_CONTROL           = const(0x1A)
 MASTER_ACTIVATION = const(0x20)
 #DISPLAY_UPDATE_CONTROL_1             = const(0x21)
 DISPLAY_UPDATE_CONTROL_2 = const(0x22)
-# Panel Break Detection              0x23
+# Panel Break Detection           \x23
 WRITE_RAM = const(0x24)
 WRITE_VCOM_REGISTER = const(0x2C)
-# Status Bit Read                    0x2F
+# Status Bit Read                 \x2F
 WRITE_LUT_REGISTER = const(0x32)
 SET_DUMMY_LINE_PERIOD = const(0x3A)
 SET_GATE_TIME = const(0x3B)
-#BORDER_WAVEFORM_CONTROL              = const(0x3C)
+BORDER_WAVEFORM_CONTROL = const(0x3C)
 SET_RAM_X_ADDRESS_START_END_POSITION = const(0x44)
 SET_RAM_Y_ADDRESS_START_END_POSITION = const(0x45)
 SET_RAM_X_ADDRESS_COUNTER = const(0x4E)
@@ -62,7 +65,9 @@ SET_RAM_Y_ADDRESS_COUNTER = const(0x4F)
 TERMINATE_FRAME_READ_WRITE = const(0xFF)  # not in datasheet, aka NOOP
 
 BUSY = const(1)  # 1=busy, 0=idle
-
+GxGDE0213B72B_PU_DELAY = const(300)
+GxEPD_BLACK = const(0)
+GxEPD_WHITE = const(1)
 
 class EPD:
     def __init__(self, spi, cs, dc, rst, busy):
@@ -77,13 +82,83 @@ class EPD:
         self.busy.init(self.busy.IN)
         self.width = EPD_WIDTH
         self.height = EPD_HEIGHT
+        self._buffer = bytearray(EPD_WIDTH * EPD_HEIGHT // 8)
+        self.fb = framebuf.FrameBuffer(self._buffer, EPD_WIDTH, EPD_HEIGHT, framebuf.MONO_HLSB)
+        self.fillScreen(GxEPD_WHITE)
 
     LUT_FULL_UPDATE = bytearray(
-        b'\x22\x55\xAA\x55\xAA\x55\xAA\x11\x00\x00\x00\x00\x00\x00\x00\x00\x1E\x1E\x1E\x1E\x1E\x1E\x1E\x1E\x01\x00\x00\x00\x00\x00')
+        b'\xA0\x90\x50\x00\x00\x00\x00\x00\x00\x00' +
+        b'\x50\x90\xA0\x00\x00\x00\x00\x00\x00\x00' +
+        b'\xA0\x90\x50\x00\x00\x00\x00\x00\x00\x00' +
+        b'\x50\x90\xA0\x00\x00\x00\x00\x00\x00\x00' +
+        b'\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00' +
+        b'\x0F\x0F\x00\x00\x00' + 
+        b'\x0F\x0F\x00\x00\x03' +
+        b'\x0F\x0F\x00\x00\x00' +
+        b'\x00\x00\x00\x00\x00' +
+        b'\x00\x00\x00\x00\x00' +
+        b'\x00\x00\x00\x00\x00' +
+        b'\x00\x00\x00\x00\x00' +
+        b'\x00\x00\x00\x00\x00' +
+        b'\x00\x00\x00\x00\x00' +
+        b'\x00\x00\x00\x00\x00' +
+        b'\x17\x41\xA8\x32\x50\x0A\x09')
+        
     LUT_PARTIAL_UPDATE = bytearray(
-        b'\x18\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x0F\x01\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00')
-
+        b'\x40\x00\x00\x00\x00\x00\x00\x00\x00\x00' +
+        b'\x80\x00\xA0\x00\x00\x00\x00\x00\x00\x00' +
+        b'\x40\x00\x00\x00\x00\x00\x00\x00\x00\x00' +
+        b'\x80\x00\xA0\x00\x00\x00\x00\x00\x00\x00' +
+        b'\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00' +
+        b'\x0A\x00\x00\x00\x00' + 
+        b'\x00\x00\x00\x00\x00' +
+        b'\x00\x00\x00\x00\x00' +
+        b'\x00\x00\x00\x00\x00' +
+        b'\x00\x00\x00\x00\x00' +
+        b'\x00\x00\x00\x00\x00' +
+        b'\x00\x00\x00\x00\x00' +
+        b'\x00\x00\x00\x00\x00' +
+        b'\x00\x00\x00\x00\x00' +
+        b'\x00\x00\x00\x00\x00' +
+        b'\x15\x41\xA8\x32\x50\x2C\x0B')
+        
+    GDOControl = [0x01, (EPD_HEIGHT - 1) % 256, (EPD_HEIGHT - 1) % 256, 0x00]
+    softstart = [0x0c, 0xd7, 0xd6, 0x9d]
+    VCOMVol = [0x2c, 0xa8]
+    DummyLine = [0x3a, 0x1a]
+    Gatetime = [0x3b, 0x08]
+    
+    def update(self):
+        self.init_full()
+        self._command(0x24)
+        w = EPD_WIDTH//8
+        self.fb.scroll(0, 1)
+        for y in range(0, EPD_HEIGHT):
+            for x in range(0, w):
+                idx = (EPD_HEIGHT - y) * w + x
+                if idx < len(self._buffer):
+                    self._data(bytearray([~self._buffer[idx]]))
+                else:
+                    self._data(bytearray([~0x00]))
+        self.update_full()
+        self._powerOff()
+        
+    def clear(self):
+        self.fillScreen(GxEPD_WHITE)
+    
+    def fillScreen(self, color):
+        if color == GxEPD_BLACK:
+            for i in range(0, len(self._buffer)):
+                self._buffer[i] = 0xFF
+        else:
+            for i in range(0, len(self._buffer)):
+                self._buffer[i] = 0x00
+    
     def _command(self, command, data=None):
+        if self.busy.value() == BUSY:
+            str = 'command 0x%X' % command
+            wait_until_idle(str)
+      
         self.dc(0)
         self.cs(0)
         self.spi.write(bytearray([command]))
@@ -99,85 +174,105 @@ class EPD:
 
     def init(self):
         self.reset()
+        self.wait_until_idle('_InitDisplay')
+        self._command(SW_RESET)
+        self.wait_until_idle('_InitDisplay')
+        self._command(ANALOG_BLOCK_CONTROL)
+        self._data(bytearray([0x54]))
+        self._command(DIGITAL_BLOCK_CONTROL)
+        self._data(bytearray([0x3B]))
+        
         self._command(DRIVER_OUTPUT_CONTROL)
-        self._data(bytearray([(EPD_HEIGHT - 1) & 0xFF]))
-        self._data(bytearray([((EPD_HEIGHT - 1) >> 8) & 0xFF]))
-        self._data(bytearray([0x00]))  # GD = 0 SM = 0 TB = 0
-        self._command(BOOSTER_SOFT_START_CONTROL, b'\xD7\xD6\x9D')
-        self._command(WRITE_VCOM_REGISTER, b'\xA8')  # VCOM 7C
-        self._command(SET_DUMMY_LINE_PERIOD, b'\x1A')  # 4 dummy lines per gate
-        self._command(SET_GATE_TIME, b'\x08')  # 2us per line
-        # X increment Y increment
-        self._command(DATA_ENTRY_MODE_SETTING, b'\x03')
-        self.set_lut(self.LUT_FULL_UPDATE)
+        self._data(bytearray([0xF9]))
+        self._data(bytearray([0x00]))
+        self._data(bytearray([0x00]))
+        
+        self._command(DATA_ENTRY_MODE_SETTING)
+        self._data(bytearray([0x01]))
+        
+        self._command(SET_RAM_X_ADDRESS_START_END_POSITION)
+        self._data(bytearray([0x00]))
+        self._data(bytearray([0x0F]))
+        
+        self._command(SET_RAM_Y_ADDRESS_START_END_POSITION)
+        self._data(bytearray([0xF9]))
+        self._data(bytearray([0x00]))
+        self._data(bytearray([0x00]))
+        self._data(bytearray([0x00]))
+        
+        self._command(BORDER_WAVEFORM_CONTROL)
+        self._data(bytearray([0x03]))
+        
+        self._command(WRITE_VCOM_REGISTER)
+        self._data(bytearray([0x50]))
+        
+        self._command(Gate_Driving_Voltage_Control)
+        self._data(bytearray([self.LUT_FULL_UPDATE[100]]))
 
-    def wait_until_idle(self):
+        self._command(Source_Driving_voltage_Control)
+        self._data(bytearray([self.LUT_FULL_UPDATE[101]]))
+        self._data(bytearray([self.LUT_FULL_UPDATE[102]]))
+        self._data(bytearray([self.LUT_FULL_UPDATE[103]]))
+        
+        self._command(SET_DUMMY_LINE_PERIOD)
+        self._data(bytearray([self.LUT_FULL_UPDATE[105]]))
+        self._command(SET_GATE_TIME)
+        self._data(bytearray([self.LUT_FULL_UPDATE[106]]))
+        
+        self._command(WRITE_LUT_REGISTER)
+        for i in range(0, 100):
+            self._data(bytearray([self.LUT_FULL_UPDATE[i]]))
+        self._command(SET_RAM_X_ADDRESS_COUNTER)
+        self._data(bytearray([0x00]))
+        self._command(SET_RAM_Y_ADDRESS_COUNTER)
+        self._data(bytearray([0xF9]))
+        self._data(bytearray([0x00]))
+        self.wait_until_idle('_InitDisplay')
+
+    def wait_until_idle(self, info = None):
         while self.busy.value() == BUSY:
+            #if info != None:
+            #    print(info)
             sleep_ms(100)
+            
+    def _powerOn(self):
+        self._command(DISPLAY_UPDATE_CONTROL_2)
+        self._data(bytearray([0xC0]))
+        self._command(MASTER_ACTIVATION)
+        self.wait_until_idle('_PowerOn')
+        
+    def _powerOff(self):
+        self._command(DISPLAY_UPDATE_CONTROL_2)
+        self._data(bytearray([0xC3]))
+        self._command(MASTER_ACTIVATION)
+        self.wait_until_idle('_PowerOff')
+            
+    def init_full(self):
+        self.init()
+        self._command(WRITE_LUT_REGISTER, self.LUT_FULL_UPDATE)
+        self._powerOn()
+        
+    def init_part(self):
+        self.init()
+        self._command(WRITE_LUT_REGISTER, self.LUT_PARTIAL_UPDATE)
+        self._powerOn()
+        
+    def update_full(self):
+        self._command(DISPLAY_UPDATE_CONTROL_2)
+        self._data(bytearray([0xC7]))
+        self._command(MASTER_ACTIVATION)
+        self.wait_until_idle('_Update_Full')
+        
+    def update_part(self):
+        self._command(DISPLAY_UPDATE_CONTROL_2)
+        self._data(bytearray([0x04]))
+        self._command(MASTER_ACTIVATION)
+        self.wait_until_idle('_Update_Part')
+        self._command(TERMINATE_FRAME_READ_WRITE)
 
     def reset(self):
         self.rst(0)
         sleep_ms(200)
         self.rst(1)
         sleep_ms(200)
-
-    def set_lut(self, lut):
-        self._command(WRITE_LUT_REGISTER, lut)
-
-    # put an image in the frame memory
-    def set_frame_memory(self, image, x, y, w, h):
-        # x point must be the multiple of 8 or the last 3 bits will be ignored
-        x = x & 0xF8
-        w = w & 0xF8
-
-        if (x + w >= self.width):
-            x_end = self.width - 1
-        else:
-            x_end = x + w - 1
-
-        if (y + h >= self.height):
-            y_end = self.height - 1
-        else:
-            y_end = y + h - 1
-
-        self.set_memory_area(x, y, x_end, y_end)
-        self.set_memory_pointer(x, y)
-        self._command(WRITE_RAM, image)
-
-    # replace the frame memory with the specified color
-    def clear_frame_memory(self, color):
-        self.set_memory_area(0, 0, self.width - 1, self.height - 1)
-        self.set_memory_pointer(0, 0)
-        self._command(WRITE_RAM)
-        # send the color data
-        for i in range(0, self.width // 8 * self.height):
-            self._data(bytearray([color]))
-
-    # draw the current frame memory and switch to the next memory area
-    def display_frame(self):
-        self._command(DISPLAY_UPDATE_CONTROL_2, b'\xC4')
-        self._command(MASTER_ACTIVATION)
-        self._command(TERMINATE_FRAME_READ_WRITE)
-        self.wait_until_idle()
-
-    # specify the memory area for data R/W
-    def set_memory_area(self, x_start, y_start, x_end, y_end):
-        self._command(SET_RAM_X_ADDRESS_START_END_POSITION)
-        # x point must be the multiple of 8 or the last 3 bits will be ignored
-        self._data(bytearray([(x_start >> 3) & 0xFF]))
-        self._data(bytearray([(x_end >> 3) & 0xFF]))
-        self._command(SET_RAM_Y_ADDRESS_START_END_POSITION,
-                      ustruct.pack("<HH", y_start, y_end))
-
-    # specify the start point for data R/W
-    def set_memory_pointer(self, x, y):
-        self._command(SET_RAM_X_ADDRESS_COUNTER)
-        # x point must be the multiple of 8 or the last 3 bits will be ignored
-        self._data(bytearray([(x >> 3) & 0xFF]))
-        self._command(SET_RAM_Y_ADDRESS_COUNTER, ustruct.pack("<H", y))
-        self.wait_until_idle()
-
-    # to wake call reset() or init()
-    def sleep(self):
-        self._command(DEEP_SLEEP_MODE)
-        self.wait_until_idle()
+                
