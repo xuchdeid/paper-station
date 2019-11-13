@@ -5,6 +5,7 @@ from numpy import *
 import numpy as np
 import sys
 import os
+import json
 
 Pattern = {
     1: [[1]],
@@ -65,10 +66,50 @@ def render(path, name, dim):
                     else:
                         arr[dim * i + ii][dim * j + jj] = 0
 
+    renderTobByte(arr, m, n, savefilename)
+
     new_matrix = mat(arr)
     new_im = Image.fromarray(new_matrix.astype(np.ubyte))
     new_im = new_im.convert("RGBA")
     new_im.save(savefilename)
+
+
+def renderTobByte(arr, width, height, filename):
+    data = {
+        'meta': {
+            'width': 0,
+            'height': 0
+        },
+        'bytes': 'bytearray(b\'%s\')'
+    }
+    _width = width
+    w = _width % 8
+    if w != 0:
+        w = _width // 8 + 1
+    else:
+        w = _width // 8
+
+    data['meta']['width'] = w
+    data['meta']['height'] = height
+
+    strData = ''
+    for i in range(0, height):
+        for j in range(0, w):
+            value = 0
+            for index in range(0, 8):
+                _width = j * 8 + index
+                _value = 0  # white
+                if _width < width:
+                    if arr[i][_width] == 0:
+                        _value = 1
+                value += _value << (7 - index)
+            #print('%d' % value)
+            #print('\\x%s' % format(value, '02X'))
+            strData += '\\x%s' % format(value, '02X')
+
+    data['bytes'] = data['bytes'] % strData
+    f = open('%s.json' % filename, "w")
+    f.write(json.dumps(data))
 
 
 if __name__ == '__main__':
