@@ -65,8 +65,8 @@ TERMINATE_FRAME_READ_WRITE = const(0xFF)  # not in datasheet, aka NOOP
 
 BUSY = const(1)  # 1=busy, 0=idle
 GxGDE0213B72B_PU_DELAY = const(300)
-GxEPD_BLACK = const(0)
-GxEPD_WHITE = const(1)
+GxEPD_BLACK = const(1)
+GxEPD_WHITE = const(0)
 
 
 class EPD:
@@ -275,7 +275,7 @@ class EPD:
         self.rst(1)
         await asyncio.sleep_ms(100)
 
-    def drawBitmap(self, bitmap, width, height, startX, startY):
+    def drawBitmapOld(self, bitmap, width, height, startX, startY):
         max_w = EPD_WIDTH//8
         for h in range(startY, height + startY):
             for w in range(0, width):
@@ -284,3 +284,34 @@ class EPD:
                     idx = h * max_w + w
                     old = self._buffer[idx]
                     self._buffer[idx] = value | old
+
+    def drawPiexl(self, x, y, color):
+        t = y
+        y = x
+        x = 121 - t
+        if x >= EPD_WIDTH or y >= EPD_HEIGHT:
+            return
+        else:
+            max_w = EPD_WIDTH//8
+            w = x // 8
+            dw = x % 8
+            idx = y * max_w + w
+            value = self._buffer[idx]
+            if color == GxEPD_BLACK:
+                self._buffer[idx] = value | 1 << (7 - dw)
+            else:
+                self._buffer[idx] = value & ~(1 << (7 - dw))
+
+    def drawBitmap(self, bitmap, x, y, width, height):
+        if x >= EPD_WIDTH or y >= EPD_HEIGHT:
+            return
+        else:
+            for h in range(0, height):
+                for w in range(0, width):
+                    value = bitmap[h * width + w]
+                    for index in range(0, 8):
+                        color = GxEPD_WHITE
+                        test = 1 << (7 - index)
+                        if value & test == test:
+                            color = GxEPD_BLACK
+                        self.drawPiexl(x+w*8+index, y+h, color)

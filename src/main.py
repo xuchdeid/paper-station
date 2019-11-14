@@ -1,7 +1,8 @@
 import gdeh0213b72b
+from gdeh0213b72b import GxEPD_BLACK, GxEPD_WHITE
 from machine import Pin, SPI, Timer
 import machine
-from res.icon import message
+from res.icon import demo
 from time import sleep_ms
 import uasyncio as asyncio
 import esp32
@@ -43,9 +44,9 @@ async def mainUI():
         #canvas.text('button: %d' % button_state, 2, 25, 1)
         #canvas.text('temp: %d' % esp32.raw_temperature(), 2, 35, 1)
         y = 0
-        icon = message
-        device.drawBitmap(icon['bytes'], icon['meta']
-                          ['width'], icon['meta']['height'], 0, y)
+        icon = demo
+        device.drawBitmap(icon['bytes'], 0, 0, icon['meta']
+                          ['width'], icon['meta']['height'])
         await device.update()
         count += 1
         await asyncio.sleep_ms(50000)
