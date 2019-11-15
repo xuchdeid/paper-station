@@ -1,4 +1,4 @@
-from lib.canvas import Canvas
+from ui.canvas import Canvas
 from res.icon import demo
 
 
