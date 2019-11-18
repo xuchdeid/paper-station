@@ -1,5 +1,5 @@
-import gdeh0213b72b
-from gdeh0213b72b import GxEPD_BLACK, GxEPD_WHITE
+import ui.gdeh0213b72b
+from ui.gdeh0213b72b import EPD, GxEPD_BLACK, GxEPD_WHITE
 from machine import Pin, SPI
 
 device = None
@@ -19,5 +19,5 @@ def getDisplay():
         spi = SPI(2, baudrate=20000000, polarity=0,
                   phase=0, sck=sck, miso=miso, mosi=mosi)
 
-        device = gdeh0213b72b.EPD(spi, cs, dc, rst, busy)
+        device = EPD(spi, cs, dc, rst, busy)
     return device

@@ -24,7 +24,7 @@ SOFTWARE.
 """
 
 from micropython import const
-import framebuf
+import ui.framebuf as framebuf
 import uasyncio as asyncio
 
 # Display resolution
@@ -80,11 +80,12 @@ class EPD:
         self.dc.init(self.dc.OUT, value=0)
         self.rst.init(self.rst.OUT, value=0)
         self.busy.init(self.busy.IN)
-        self.width = EPD_WIDTH
-        self.height = EPD_HEIGHT
+        self.width = EPD_VISIBLE_HEIGHT
+        self.height = EPD_VISIBLE_WIDTH
         self._buffer = bytearray(EPD_WIDTH * EPD_HEIGHT // 8)
         self.fb = framebuf.FrameBuffer(
-            self._buffer, EPD_WIDTH, EPD_HEIGHT, framebuf.MONO_HLSB)
+            self._buffer, EPD_WIDTH, EPD_HEIGHT, framebuf.MHMSB)
+        self.fb.rotation = 1
         self.fillScreen(GxEPD_WHITE)
 
     LUT_FULL_UPDATE = bytearray(
@@ -285,7 +286,7 @@ class EPD:
                     old = self._buffer[idx]
                     self._buffer[idx] = value | old
 
-    def drawPiexl(self, x, y, color):
+    def drawPixel(self, x, y, color):
         t = y
         y = x
         x = 121 - t
@@ -314,4 +315,4 @@ class EPD:
                         test = 1 << (7 - index)
                         if value & test == test:
                             color = GxEPD_BLACK
-                        self.drawPiexl(x+w*8+index, y+h, color)
+                        self.drawPixel(x + w * 8 + index, y + h, color)

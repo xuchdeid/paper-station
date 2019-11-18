@@ -1,6 +1,8 @@
 import uasyncio as asyncio
 from calendar import Calendar
+from todo import Todo
 from machine import Pin
+from ui.display import getDisplay
 
 button_state = 0
 loop = None
@@ -12,10 +14,15 @@ def initButton():
 
 
 async def mainUI():
+    display = getDisplay()
     calendar = Calendar()
+    todo = Todo(calendar.width + 5, 0)
+    #calendar.startX = display.width - calendar.width
+
     while True:
-        calendar.fill(0)
-        await calendar.draw()
+        calendar.draw()
+        todo.draw()
+        await display.update()
         await asyncio.sleep_ms(60000)
 
 
