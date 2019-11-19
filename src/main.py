@@ -1,6 +1,7 @@
 import uasyncio as asyncio
 from calendar import Calendar
 from todo import Todo
+from space import Space
 from machine import Pin
 from ui.display import getDisplay
 
@@ -15,15 +16,18 @@ def initButton():
 
 async def mainUI():
     display = getDisplay()
-    calendar = Calendar()
-    todo = Todo(calendar.width + 5, 0)
-    #calendar.startX = display.width - calendar.width
+    views = []
+    views.append(Calendar())
+    y = views[0].width
+    views.append(Space(y, 0, 5, display.height))
+    y += views[1].width
+    views.append(Todo(y, 0))
 
     while True:
-        calendar.draw()
-        todo.draw()
+        for view in views:
+            view.draw()
         await display.update()
-        await asyncio.sleep_ms(60000)
+        await asyncio.sleep_ms(5000)
 
 
 async def buttonEvent():
