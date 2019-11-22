@@ -4,6 +4,7 @@ from todo import Todo
 from space import Space
 from machine import Pin
 from ui.display import getDisplay
+import utime
 
 button_state = 0
 loop = None
@@ -27,7 +28,13 @@ async def mainUI():
         for view in views:
             view.draw()
         await display.update()
-        await asyncio.sleep_ms(5000)
+        await asyncio.sleep_ms(diff60Seconds())
+
+
+def diff60Seconds():
+    data = utime.localtime()
+    second = data[5]
+    return (60 - second) * 1000
 
 
 async def buttonEvent():

@@ -12,6 +12,7 @@ class Calendar(Canvas):
         self.fillArea = [-1, -1, -1]
         self.lastYearAndMonth = [-1, -1]
         self.up = False
+        self.timezone = 8
 
     def onDraw(self):
         self.toCalendar()
@@ -61,7 +62,7 @@ class Calendar(Canvas):
         weekday = (data[6] + 1) % 7
         step = (8 - (day - weekday) % 7) % 7
 
-        machine.RTC().init((year, month, day + 1, 4, hour, minute, 0, 0))
+        #machine.RTC().init((year, month, day + 1, 4, hour, minute, 0, 0))
 
         self.fillArea[0] = weekday
         self.fillArea[2] = day
