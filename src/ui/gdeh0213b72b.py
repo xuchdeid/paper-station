@@ -65,6 +65,8 @@ TERMINATE_FRAME_READ_WRITE = const(0xFF)  # not in datasheet, aka NOOP
 
 BUSY = const(1)  # 1=busy, 0=idle
 GxGDE0213B72B_PU_DELAY = const(300)
+GxGDE0213B72B_RESET_DELAY = const(100)
+GxGDE0213B72B_BUSY_DELAY = const(100)
 GxEPD_BLACK = const(1)
 GxEPD_WHITE = const(0)
 
@@ -83,6 +85,7 @@ class EPD:
         self.width = EPD_VISIBLE_HEIGHT
         self.height = EPD_VISIBLE_WIDTH
         self._buffer = bytearray(EPD_WIDTH * EPD_HEIGHT // 8)
+        self._using_partial_mode = False
         self.fb = framebuf.FrameBuffer(
             self._buffer, EPD_WIDTH, EPD_HEIGHT, framebuf.MHMSB)
         self.fb.rotation = 1
@@ -131,7 +134,23 @@ class EPD:
     Gatetime = [0x3b, 0x08]
 
     async def update(self):
-        await self.init_full()
+        if not self._using_partial_mode:
+            self._using_partial_mode = True
+            await self.init_full()
+            await self._writeBufferToDevice()
+            await self.update_full()
+            await self._powerOff()
+        else:
+            await self.init_part()
+            await self._writeBufferToDevice()
+            await self.update_part()
+            await asyncio.sleep_ms(GxGDE0213B72B_PU_DELAY)
+            for i in range(0, 2):
+                await self._writeBufferToDevice()
+                await asyncio.sleep_ms(GxGDE0213B72B_PU_DELAY)
+            await self._powerOff()
+
+    async def _writeBufferToDevice(self):
         await self._command(0x24)
         w = EPD_WIDTH//8
         self.fb.scroll(0, 1)
@@ -142,8 +161,6 @@ class EPD:
                     self._data(bytearray([~self._buffer[idx]]))
                 else:
                     self._data(bytearray([~0x00]))
-        await self.update_full()
-        await self._powerOff()
 
     def clear(self):
         self.fillScreen(GxEPD_WHITE)
@@ -233,7 +250,7 @@ class EPD:
 
     async def wait_until_idle(self, info=None):
         while self.busy.value() == BUSY:
-            await asyncio.sleep_ms(100)
+            await asyncio.sleep_ms(GxGDE0213B72B_BUSY_DELAY)
 
     async def _powerOn(self):
         await self._command(DISPLAY_UPDATE_CONTROL_2)
@@ -272,9 +289,9 @@ class EPD:
 
     async def reset(self):
         self.rst(0)
-        await asyncio.sleep_ms(100)
+        await asyncio.sleep_ms(GxGDE0213B72B_RESET_DELAY)
         self.rst(1)
-        await asyncio.sleep_ms(100)
+        await asyncio.sleep_ms(GxGDE0213B72B_RESET_DELAY)
 
     def drawBitmapOld(self, bitmap, width, height, startX, startY):
         max_w = EPD_WIDTH//8
